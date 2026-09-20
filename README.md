@@ -79,11 +79,62 @@ cat /opt/vps-oneclick/output/deployment-report.md
 | PANEL_PUBLIC_DOMAIN | 空 | 3x-ui 面板域名，用于生成报告里的 HTTPS 地址 |
 | STATUS_PUBLIC_DOMAIN | 空 | ServerStatus 面板域名，用于生成报告里的 HTTPS 地址 |
 | SSH_PORT | 22 | SSH 端口，ufw 会自动放行 |
+| TIMEZONE | America/Los_Angeles | 系统时区；必须使用 IANA 时区名，例如 `Asia/Shanghai` |
 | SS_SERVER | 空 | 仅 `INSTALL_SERVERSTATUS=2` 时必填，已有 ServerStatus 服务端 IP / 域名 |
 | SS_PANEL_PORT | 35601 | ServerStatus 探针上报端口；模式 `1` 为本机端口，模式 `2` 为远端服务端端口 |
 | SS_WEB_PORT | 35602 | ServerStatus 静态面板端口，仅模式 `1` 使用 |
 
 所有密钥类变量（UUID、x25519 密钥对、shortId、面板账号密码）留空即可，首次部署自动生成并保存在服务器 `/etc/vps-oneclick/secrets.env`，重复执行 `deploy.sh` 不会更换，客户端无需重新导入。
+
+### TIMEZONE 怎么定
+
+`TIMEZONE` 必须填写 Linux 常用的 **IANA 时区名**，格式是 `区域/城市`，不要写 `GMT+8`、`UTC+8` 或中文描述。
+
+`config.env.example` 默认使用 `America/Los_Angeles`；如果这个变量为空或没有设置，脚本会退回使用 `Asia/Shanghai`。
+
+合法示例：
+
+```bash
+TIMEZONE="Asia/Shanghai"          # 中国标准时间
+TIMEZONE="Asia/Tokyo"             # 日本时间
+TIMEZONE="America/Los_Angeles"    # 美国洛杉矶时间
+TIMEZONE="Etc/UTC"                # UTC
+```
+
+不确定服务器应使用哪个时区时，建议按用途选择：
+
+- 想让部署日志、面板时间和北京时间一致：使用 `Asia/Shanghai`。
+- VPS 在美国洛杉矶，且希望系统日志跟随机房时间：使用 `America/Los_Angeles`。
+- 服务器跨地区协作或只需要统一基准时间：使用 `Etc/UTC`。
+
+不要凭记忆猜测城市名。可以先在 VPS 上查询合法值：
+
+```bash
+timedatectl list-timezones
+
+# 按关键字筛选
+timedatectl list-timezones | grep -E 'Asia/(Shanghai|Tokyo)|America/Los_Angeles|Etc/UTC'
+```
+
+选择后写入 `config.env`：
+
+```bash
+TIMEZONE="Asia/Shanghai"
+```
+
+`10-init.sh` 部署时会执行：
+
+```bash
+sudo timedatectl set-timezone "$TIMEZONE"
+```
+
+部署后可以确认：
+
+```bash
+timedatectl
+```
+
+输出中的 `Time zone` 应显示你配置的值。注意：如果时区名写错，当前脚本不会中断部署，而是保留系统原时区；所以上线前建议先确认名称存在。
 
 ### ServerStatus 安装模式
 
