@@ -197,3 +197,9 @@ for f in deploy.sh scripts/*.sh; do bash -n "$f" && echo "OK: $f"; done
 # Xray 配置模板渲染校验
 python tests/test_render.py
 ```
+
+## 许可证
+
+本项目代码采用 [MIT License](LICENSE) 发布。
+
+部署脚本下载或安装的第三方组件（如 Xray、Cloudflare WARP、ServerStatus、3x-ui、cloudflared）仍分别适用其原始许可证。
