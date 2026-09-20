@@ -40,6 +40,81 @@ ssh -L 35602:127.0.0.1:35602 root@服务器IP
 
 然后在本机浏览器打开 `http://localhost:35602`。
 
+## 原理与数据流
+
+### 架构原理
+
+下图展示核心代理组件与可选面板组件的关系。实线是代理主链路；虚线是可选管理、监控或备用链路。
+
+```mermaid
+flowchart LR
+    C["本地客户端<br/>v2rayN / v2rayNG / Shadowrocket"]
+    U["管理员浏览器"]
+
+    subgraph CF["Cloudflare，可选"]
+        CDN["CDN / 橙色云代理"]
+        TUN["Zero Trust Tunnel"]
+    end
+
+    subgraph VPS["VPS"]
+        X["Xray Core<br/>Reality + XHTTP"]
+        W["Cloudflare WARP<br/>SOCKS5 127.0.0.1:40000"]
+        subgraph SS["ServerStatus，可选"]
+            SSC["数据采集端<br/>默认 35601"]
+            SSP["本机探针"]
+            SSW["静态 Web<br/>127.0.0.1:35602"]
+        end
+        UI["3x-ui"]
+        CLD["cloudflared"]
+    end
+
+    NET[("公网目标服务")]
+    BLOCK["blackhole 阻断"]
+
+    C -- "主链路：VLESS + XHTTP + Reality<br/>默认 443" --> X
+    C -. "备用链路：XHTTP + TLS<br/>默认 2053" .-> CDN
+    CDN -. "TLS 回源" .-> X
+
+    X --> W
+    X --> NET
+    X --> BLOCK
+
+    U -. "HTTPS + Access" .-> TUN
+    TUN -. "本机回源" .-> CLD
+    CLD -.-> UI
+    CLD -.-> SSW
+    SSP -- "探针上报" --> SSC
+```
+
+核心部署只需要 `C → X → NET` 这条主链路。CDN、Tunnel、ServerStatus 和 3x-ui 都是可选能力；关闭这些组件不会影响 Reality 主节点。
+
+### 数据流向
+
+下图展示客户端请求进入 Xray 后的路由判断。响应沿原链路反向返回。
+
+```mermaid
+flowchart TD
+    REQ["客户端代理请求"] --> IN["Xray 入站<br/>VLESS + XHTTP + Reality"]
+    IN --> ROUTE["路由规则判断"]
+
+    ROUTE -- "geosite:openai<br/>geosite:anthropic<br/>domain:claude.ai" --> WARP["warp 出站"]
+    WARP -- "SOCKS5 127.0.0.1:40000" --> WPROC["warp-svc"]
+    WPROC --> CFOUT["Cloudflare WARP 出口"]
+    CFOUT --> AI["AI 站点"]
+
+    ROUTE -- "其他公网域名 / IP" --> DIRECT["direct / freedom 出站"]
+    DIRECT --> PUB["公网目标服务"]
+
+    ROUTE -- "geoip:private" --> BLOCK["blackhole 出站"]
+    BLOCK --> DROP["丢弃请求"]
+```
+
+对应的服务端规则是：
+
+- AI 域名命中 `warp` 出站，避免 VPS 原始出口被风控。
+- 其他普通公网流量命中 `direct / freedom` 出站。
+- 私有网段命中 `blackhole`，阻止通过代理扫描或访问内网。
+
 ## 快速开始
 
 ```bash
