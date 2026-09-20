@@ -1,6 +1,44 @@
 # vps-oneclick 一键部署
 
-洛杉矶 VPS 一键部署项目：Xray（XHTTP + Reality 主节点）+ WARP AI 分流出口 + ServerStatus 面板探针一体 + 3x-ui + cloudflared Tunnel。
+洛杉矶 VPS 一键部署项目：Xray（XHTTP + Reality 主节点）为核心，默认包含 WARP AI 分流，可选 ServerStatus、3x-ui 和 cloudflared Tunnel。
+
+## 运行模式与依赖
+
+### 最小可用模式：不需要域名和 Cloudflare 配置
+
+主节点使用 `VLESS + XHTTP + Reality`，只需要一台有公网 IP 的 Ubuntu / Debian VPS，并放行主节点端口（默认 `443`）。Reality 的 `REALITY_SNI` 是伪装目标域名，不是你必须购买的域名；默认 `www.samsung.com` 仅作为伪装站点使用。
+
+使用下面的最小配置时，不会启用 CDN 备用节点，也不会接入 Cloudflare Tunnel。部署完成后会生成基于 VPS 公网 IP 的 `vless://` 链接，可直接导入客户端：
+
+```bash
+CDN_DOMAIN=""
+TUNNEL_TOKEN=""
+INSTALL_TUNNEL="0"
+INSTALL_3XUI="0"
+INSTALL_SERVERSTATUS="0"
+```
+
+注意：`30-warp.sh` 默认仍会安装 Cloudflare WARP，用于 AI 站点分流。它不需要 Cloudflare 账号或域名，但出口会经过 Cloudflare WARP 网络。如果你要求完全不用任何 Cloudflare 组件，还需要单独禁用 WARP 相关部署和路由。
+
+### 可选组件的依赖区别
+
+| 功能 | 是否需要自己的域名 | 是否需要 Cloudflare 配置 | 说明 |
+|---|---|---|---|
+| Reality 主节点 | 不需要 | 不需要 | 核心代理功能，使用 VPS 公网 IP 生成客户端链接 |
+| WARP AI 分流 | 不需要 | 不需要账号/域名 | 默认安装并分流 AI 站点；出口依赖 Cloudflare WARP 网络 |
+| CDN 备用节点 | 需要 | 需要 DNS 和 SSL 配置 | `CDN_DOMAIN` 留空时不启用 |
+| ServerStatus 本机部署 | 不需要 | 不需要 | `INSTALL_SERVERSTATUS="1"`；Web 默认监听本机，可用 SSH 隧道访问 |
+| ServerStatus 客户端 | 不需要 | 不需要 | `INSTALL_SERVERSTATUS="2"`；上报目标可以是已有服务器的 IP |
+| 3x-ui 本机部署 | 不需要 | 不需要 | `INSTALL_3XUI="1"`；本机访问可通过 SSH 隧道 |
+| Cloudflare Tunnel | 需要 Cloudflare 域名 | 需要 Zero Trust / Tunnel token | 用于把面板安全发布到公网；不影响代理主链路 |
+
+ServerStatus 本机 Web 端口默认是 `127.0.0.1:35602`。没有 Tunnel 时，可先建立 SSH 隧道再访问：
+
+```bash
+ssh -L 35602:127.0.0.1:35602 root@服务器IP
+```
+
+然后在本机浏览器打开 `http://localhost:35602`。
 
 ## 快速开始
 
@@ -20,7 +58,7 @@ cd /opt/vps-oneclick && sudo bash deploy.sh
 
 部署完成后终端会直接打印 `vless://` 分享链接和二维码，复制进 v2rayN「从剪贴板导入」，或用 v2rayNG / Shadowrocket 扫码即可测试。
 
-部署完成后会生成 `output/deployment-report.md`（权限 600），汇总访问地址、账号密码、Cloudflare 待确认操作和验证步骤：
+部署完成后会生成 `output/deployment-report.md`（权限 600），汇总访问地址、账号密码、可选组件状态和验证步骤：
 
 ```bash
 cat /opt/vps-oneclick/output/deployment-report.md
@@ -61,6 +99,8 @@ SS_PASS="主服务器分配的节点密码"
 ```
 
 ## Cloudflare 相关配置
+
+以下内容全部用于可选增强能力；只部署 Reality 主节点时可以完全跳过这一节。
 
 ### CDN 备用节点
 
