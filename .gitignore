@@ -1,0 +1,6 @@
+output/*
+!output/.gitkeep
+deploy.log
+secrets.env
+config.env
+*.pem
