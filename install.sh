@@ -143,7 +143,12 @@ ensure_download_tools() {
 
 download_source() {
   local output="$1"
-  local direct="https://codeload.github.com/${REPO}/tar.gz/refs/${REF_TYPE}s/${REF}"
+  local ref_path
+  case "$REF_TYPE" in
+    branch) ref_path="heads" ;;
+    tag) ref_path="tags" ;;
+  esac
+  local direct="https://codeload.github.com/${REPO}/tar.gz/refs/${ref_path}/${REF}"
   local -a urls=()
   local url
 
