@@ -1,8 +1,10 @@
 # vps-oneclick 一键部署
 
+## 1. 项目介绍
+
 洛杉矶 VPS 一键部署项目：Xray（XHTTP + Reality 主节点）为核心，默认包含 WARP AI 分流，可选 ServerStatus、3x-ui 和 cloudflared Tunnel。
 
-## 运行模式与依赖
+### 运行模式与依赖
 
 ### 最小可用模式：不需要域名和 Cloudflare 配置
 
@@ -40,9 +42,9 @@ ssh -L 35602:127.0.0.1:35602 root@服务器IP
 
 然后在本机浏览器打开 `http://localhost:35602`。
 
-## 原理与数据流
+## 2. 原理图、流程图
 
-### 架构原理
+### 架构原理图
 
 下图展示核心代理组件与可选面板组件的关系。实线是代理主链路；虚线是可选管理、监控或备用链路。
 
@@ -88,7 +90,7 @@ flowchart LR
 
 核心部署只需要 `C → X → NET` 这条主链路。CDN、Tunnel、ServerStatus 和 3x-ui 都是可选能力；关闭这些组件不会影响 Reality 主节点。
 
-### 数据流向
+### 数据流程图
 
 下图展示客户端请求进入 Xray 后的路由判断。响应沿原链路反向返回。
 
@@ -115,7 +117,41 @@ flowchart TD
 - 其他普通公网流量命中 `direct / freedom` 出站。
 - 私有网段命中 `blackhole`，阻止通过代理扫描或访问内网。
 
-## 快速开始
+## 3. 使用方式
+
+### 在线一键安装
+
+在全新 VPS 上执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wwddcc/vps-oneclick/master/install.sh \
+  | sudo bash -s -- --minimal --timezone Asia/Shanghai --run
+```
+
+`--minimal` 会生成最小可用配置：只部署 Reality 主节点，不启用 CDN、Tunnel、3x-ui 和 ServerStatus。部署完成后终端会输出 `vless://` 链接和二维码。
+
+生产环境建议固定版本并校验源码包：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wwddcc/vps-oneclick/master/install.sh \
+  | sudo bash -s -- \
+    --version v1.0.0 \
+    --sha256 替换为源码包SHA256 \
+    --minimal \
+    --timezone Asia/Shanghai \
+    --run
+```
+
+默认安装目录是 `/opt/vps-oneclick`。重复执行会备份旧目录，但保留其中已有的 `config.env`。使用 `--no-run` 可以只下载和准备配置：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wwddcc/vps-oneclick/master/install.sh \
+  | sudo bash -s -- --minimal --no-run
+```
+
+`curl | bash` 会以 root 执行远端脚本；请只从本仓库官方地址获取，生产环境优先使用固定版本和 SHA-256 校验。
+
+### 手动上传安装
 
 ```bash
 # 1. 从模板创建本地配置（真实配置不提交）
@@ -139,7 +175,7 @@ cd /opt/vps-oneclick && sudo bash deploy.sh
 cat /opt/vps-oneclick/output/deployment-report.md
 ```
 
-## config.env 说明
+### config.env 说明
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
@@ -161,7 +197,7 @@ cat /opt/vps-oneclick/output/deployment-report.md
 
 所有密钥类变量（UUID、x25519 密钥对、shortId、面板账号密码）留空即可，首次部署自动生成并保存在服务器 `/etc/vps-oneclick/secrets.env`，重复执行 `deploy.sh` 不会更换，客户端无需重新导入。
 
-### TIMEZONE 怎么定
+#### TIMEZONE 怎么定
 
 `TIMEZONE` 必须填写 Linux 常用的 **IANA 时区名**，格式是 `区域/城市`，不要写 `GMT+8`、`UTC+8` 或中文描述。
 
@@ -211,7 +247,7 @@ timedatectl
 
 输出中的 `Time zone` 应显示你配置的值。注意：如果时区名写错，当前脚本不会中断部署，而是保留系统原时区；所以上线前建议先确认名称存在。
 
-### ServerStatus 安装模式
+#### ServerStatus 安装模式
 
 - `INSTALL_SERVERSTATUS="1"`：在当前服务器安装数据收集服务端、静态面板和本机探针。
 - `INSTALL_SERVERSTATUS="2"`：当前服务器只安装探针客户端，并上报到已有 ServerStatus 服务端。必须填写：
@@ -224,17 +260,17 @@ SS_USER="主服务器分配的节点用户名"
 SS_PASS="主服务器分配的节点密码"
 ```
 
-## Cloudflare 相关配置
+### Cloudflare 相关配置
 
 以下内容全部用于可选增强能力；只部署 Reality 主节点时可以完全跳过这一节。
 
-### CDN 备用节点
+#### CDN 备用节点
 
 1. DNS 添加 A 记录：`la.example.com` -> 服务器 IP，开启橙色云
 2. SSL/TLS 模式设为 **Full**（用脚本生成的自签证书）或 **Full (strict)**（推荐，用 Origin 证书）
 3. Origin 证书：面板 -> SSL/TLS -> Origin Server -> Create Certificate，下载 `cert.pem` / `key.pem` 放到项目目录后部署
 
-### Zero Trust Tunnel
+#### Zero Trust Tunnel
 
 1. Zero Trust 后台 -> Networks -> Tunnels -> Create tunnel（Cloudflared 类型）
 2. 复制 token 填入 `config.env` 的 `TUNNEL_TOKEN`，重跑 `deploy.sh`
@@ -243,16 +279,18 @@ SS_PASS="主服务器分配的节点密码"
    - `status.example.com` -> `http://127.0.0.1:35602`
 4. 两个 hostname 都加 Access 策略，限定你的 Google 邮箱登录
 
-## 重复部署 / 迁移新机器
+## 4. 运维命令
+
+### 重复部署 / 迁移新机器
 
 - 同一台机器重跑 `deploy.sh`：幂等，密钥复用，只刷新配置
 - 全新机器：重新上传项目 + `deploy.sh`，生成全新密钥，导入新链接即可
 
-## 添加探针节点（其他服务器）
+### 添加探针节点（其他服务器）
 
 新 VPS 的探针要显示在面板上，分两步：先在主服务器登记节点，再在新服务器安装客户端。
 
-### 1. 主服务器登记节点
+#### 1. 主服务器登记节点
 
 ```bash
 cd /opt/vps-oneclick
@@ -261,7 +299,7 @@ sudo bash scripts/add-serverstatus-node.sh --name "东京-备用" --client-ip �
 
 脚本会生成独立凭据写入 `/usr/local/ServerStatus/server/config.json` 并重启采集端、ufw 按源 IP 放行 35601/tcp、凭据追加到 `/etc/vps-oneclick/secrets.env`，最后打印新服务器上要执行的安装命令。
 
-### 2. 新服务器安装探针
+#### 2. 新服务器安装探针
 
 ```bash
 # 本地或主服务器上传客户端脚本
@@ -273,7 +311,7 @@ sudo bash deploy-status-client.sh --server 主服务器IP --port 35601 --user no
 
 脚本会下载 Hotaru 探针、注入连接信息、注册 `serverstatus-probe` 服务（开机自启），并自检端口连通性与凭据是否被采集端接受。
 
-### 管理节点
+#### 管理节点
 
 ```bash
 # 查看已登记节点的凭据（主服务器）
@@ -291,7 +329,7 @@ rm -rf /usr/local/ServerStatus-client /etc/systemd/system/serverstatus-probe.ser
 
 注意：Hotaru 探针协议为明文传输凭据，35601 仅对指定源 IP 开放；更换凭据后需要在新 VPS 重跑安装命令。
 
-## 常用排查
+### 常用排查
 
 ```bash
 systemctl status xray                 # Xray 主服务
@@ -307,14 +345,16 @@ cat /etc/vps-oneclick/secrets.env                  # 所有生成密钥
 cat output/client-links.txt                        # 客户端链接
 ```
 
-## 安全说明
+## 5. 其它说明
+
+### 安全说明
 
 - 防火墙默认仅放行 SSH / 443 / 2053；添加远程探针节点时按源 IP 放行 35601/tcp（见「添加探针节点」）
 - fail2ban 默认保护 SSH
 - 私有 IP 段访问已在 Xray 路由中阻断，避免代理被用来扫描内网
 - `output/` 和 `secrets.env` 已在 `.gitignore` 中，密钥文件权限 600
 
-## 本地校验
+### 本地校验
 
 ```bash
 # Bash 语法检查（需要 Git Bash / WSL / Linux）
@@ -324,7 +364,7 @@ for f in deploy.sh scripts/*.sh; do bash -n "$f" && echo "OK: $f"; done
 python tests/test_render.py
 ```
 
-## 许可证
+### 许可证
 
 本项目代码采用 [MIT License](LICENSE) 发布。
 
